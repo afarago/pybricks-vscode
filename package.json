@@ -279,8 +279,7 @@
           ".ev3",
           ".ev3m",
           ".rbf",
-          ".proj",
-          ".py"
+          ".proj"
         ],
         "aliases": [
           "LEGO",

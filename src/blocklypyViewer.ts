@@ -65,6 +65,7 @@ export class blocklypyViewerProvider implements vscode.CustomReadonlyEditorProvi
     // private fileWatcher?: vscode.FileSystemWatcher; // only works in workspace
     // private uriLastModified: number = 0;
     private pollInterval?: NodeJS.Timeout;
+    private dirty = false;
 
     async openCustomDocument(
         uri: vscode.Uri,
@@ -93,6 +94,10 @@ export class blocklypyViewerProvider implements vscode.CustomReadonlyEditorProvi
             (e: vscode.WebviewPanelOnDidChangeViewStateEvent) => {
                 if (webviewPanel.active) {
                     blocklypyViewerProvider.activeProvider = this;
+                    if (this.dirty) {
+                        this.dirty = false;
+                        this.refresh();
+                    }
                 } else if (blocklypyViewerProvider.activeProvider === this) {
                     blocklypyViewerProvider.activeProvider = undefined;
                 }
@@ -168,8 +173,15 @@ export class blocklypyViewerProvider implements vscode.CustomReadonlyEditorProvi
                     const stat = await vscode.workspace.fs.stat(document.uri);
                     if (stat.mtime !== lastModified) {
                         lastModified = stat.mtime;
-                        await this.refresh();
-                        // console.log('Polled file change detected and refreshed');
+                        console.log(
+                            `Detected change in ${document.uri.path}, refreshing...`,
+                            this.currentPanel?.active,
+                        );
+                        if (this.currentPanel?.active) {
+                            await this.refresh();
+                        } else {
+                            this.dirty = true; // Mark as dirty, don't refresh yet
+                        }
                     }
                 } finally {
                     polling = false;
