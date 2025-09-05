@@ -258,8 +258,13 @@ class BLE {
             return;
         }
 
-        try {
-            this.isScanning = true;
+        this.allDevices = {};
+        noble.on('discover', (peripheral) => {
+            const { localName, serviceUuids } = peripheral.advertisement;
+            if (!localName || localName in this.allDevices) {
+                return;
+            }
+
             if (
                 !serviceUuids ||
                 !serviceUuids.some(
