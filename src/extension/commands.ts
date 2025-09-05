@@ -7,15 +7,12 @@ export enum PybricksCommand {
     StartUserProgram = 'pybricks.startUserProgram',
     StopUserProgram = 'pybricks.stopUserProgram',
     StatusPlaceHolder = 'pybricks.statusPlaceholder',
-    SettingsPlaceholder = 'pybricks.folder.settingsPlaceholder',
     ToggleAutoConnect = 'pybricks.toggleAutoConnect',
     ToggleAutoStart = 'pybricks.toggleAutoStart',
-    RotateViewsForward = 'pybricks.blocklypyViewer.rotateViewsForward',
-    RotateViewsBackward = 'pybricks.blocklypyViewer.rotateViewsBackward',
+    DisplayNextView = 'pybricks.blocklypyViewer.displayNextView',
+    DisplayPreviousView = 'pybricks.blocklypyViewer.displayPreviousView',
     DisplayPreview = 'pybricks.blocklypyViewer.displayPreview',
     DisplayPycode = 'pybricks.blocklypyViewer.displayPycode',
     DisplayPseudo = 'pybricks.blocklypyViewer.displayPseudo',
     DisplayGraph = 'pybricks.blocklypyViewer.displayGraph',
 }
-
-export const CommandsWithFolder = [PybricksCommand.SettingsPlaceholder];

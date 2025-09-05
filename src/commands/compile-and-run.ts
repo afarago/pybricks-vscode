@@ -32,6 +32,7 @@ export async function compileAndRunAsync() {
     }
 
     await Device.write(createStopUserProgramCommand(), false);
+    // Pybricks Code sends size 0 to clear the state before sending the new program, then sends the size on completion.
     await Device.write(createWriteUserProgramMetaCommand(0), false);
     await Device.write(createWriteUserProgramMetaCommand(blob.size), false);
 

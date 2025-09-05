@@ -17,6 +17,13 @@ interface BlocklypyViewerContent {
     // result
 }
 
+// interface BlocklypyViewerState {
+//     uri: string;
+//     currentView?: ViewType;
+//     content: BlocklypyViewerContent;
+//     lastModified: number;
+// }
+
 export enum ViewType {
     Preview = 'preview',
     Pseudo = 'pseudo',
@@ -55,6 +62,9 @@ export class blocklypyViewerProvider implements vscode.CustomReadonlyEditorProvi
     private content: BlocklypyViewerContent = {};
     private uri?: vscode.Uri;
     private currentPanel?: vscode.WebviewPanel;
+    // private fileWatcher?: vscode.FileSystemWatcher; // only works in workspace
+    // private uriLastModified: number = 0;
+    private pollInterval?: NodeJS.Timeout;
 
     async openCustomDocument(
         uri: vscode.Uri,
@@ -89,67 +99,137 @@ export class blocklypyViewerProvider implements vscode.CustomReadonlyEditorProvi
             },
         );
 
+        // webviewPanel.onDidDispose(() => {
+        //     // Serialize state and store it
+        //     const state = this.serializeState();
+        //     this.context.workspaceState.update(
+        //         `blocklypyViewerState:${this.uri?.toString()}`,
+        //         state,
+        //     );
+        // });
+
         webviewPanel.webview.options = {
             enableScripts: true,
         };
 
-        // webviewPanel.webview.html = this.getHtmlForWebview();
+        webviewPanel.webview.html = this.getHtmlForWebview();
         // this.showView(undefined);
 
-        setTimeout(async () => {
-            // Read the binary file as Uint8Array
-            const fileUint8Array = await vscode.workspace.fs.readFile(document.uri);
+        // const fileStat = await vscode.workspace.fs.stat(document.uri);
+        // this.uriLastModified = fileStat.mtime;
 
-            const file: IPyConverterFile = {
-                name: document.uri.path.split('/').pop() || 'project',
-                buffer: fileUint8Array.buffer as ArrayBuffer,
-            };
-            const options = {
-                output: { 'blockly.svg': true },
-            } satisfies IPyConverterOptions;
-            const result = await convertProjectToPython([file], options);
-            const filename = Array.isArray(result.name)
-                ? result.name.join(', ')
-                : result.name || 'Unknown';
+        // Try to restore state from workspace storage
+        // const storedState = (await this.context.workspaceState.get(
+        //     `blocklypyViewerState:${document.uri.toString()}`,
+        // )) as BlocklypyViewerState | undefined;
+        // if (storedState && storedState.lastModified === this.uriLastModified) {
+        //     this.restoreState(storedState);
+        //     webviewPanel.webview.html = this.getHtmlForWebview();
+        //     setTimeout(() => {
+        //         this.showView(this.availableView(this.currentView));
+        //     }, 100);
+        //     logDebug(`Restored state for ${document.uri.path}.`);
+        //     return;
+        // } else
+        {
+            setTimeout(async () => {
+                // Read the binary file as Uint8Array
+                this.content = await this.convertFileToPython(document.uri);
 
-            const pycode: string | undefined = Array.isArray(result.pycode)
-                ? result.pycode.join('\n')
-                : result.pycode;
+                setTimeout(() => {
+                    this.showView(this.availableView(this.currentView));
+                }, 100);
+                logDebug(
+                    this.content
+                        ? `Successfully converted ${document.uri.path} to Python (${this.content.pycode?.length} bytes).`
+                        : `Failed to convert ${document.uri.path} to Python.`,
+                );
+            }, 0);
+        }
 
-            const pseudo: string | undefined = result.plaincode;
+        // Dispose previous polling
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+        }
 
-            const preview: string | undefined = result.extra?.['blockly.svg'];
-
-            const { Graphviz } = await import('@hpcc-js/wasm-graphviz');
-            const dependencygraph = result.dependencygraph;
-            const graphviz = await Graphviz.load(); //TODO: move to static init
-            const graph: string | undefined = dependencygraph
-                ? await graphviz.dot(dependencygraph)
-                : undefined;
-
-            this.content = {
-                filename,
-                pycode,
-                pseudo,
-                preview,
-                graph,
-            };
-
-            webviewPanel.webview.html = this.getHtmlForWebview();
-            // this.showView(undefined);
-
-            setTimeout(() => {
-                this.showView(this.availableView(undefined));
-            }, 100);
-            logDebug(
-                pycode
-                    ? `Successfully converted ${filename} to Python (${pycode.length} bytes).`
-                    : `Failed to convert ${filename} to Python.`,
-            );
-        }, 0);
+        // If file is outside workspace, use polling
+        const workspaceFolders =
+            vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) ?? [];
+        const isInWorkspace = workspaceFolders.some((folder) =>
+            document.uri.fsPath.startsWith(folder),
+        );
+        if (!isInWorkspace) {
+            let lastModified = (await vscode.workspace.fs.stat(document.uri)).mtime;
+            let polling = false;
+            this.pollInterval = setInterval(async () => {
+                if (polling) return;
+                polling = true;
+                try {
+                    const stat = await vscode.workspace.fs.stat(document.uri);
+                    if (stat.mtime !== lastModified) {
+                        lastModified = stat.mtime;
+                        await this.refresh();
+                        // console.log('Polled file change detected and refreshed');
+                    }
+                } finally {
+                    polling = false;
+                }
+            }, 2000); // Poll every 2 seconds
+            webviewPanel.onDidDispose(() => {
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
+                }
+            });
+        }
     }
 
     private currentView?: ViewType;
+    public async refresh() {
+        if (this.uri) {
+            this.content = await this.convertFileToPython(this.uri);
+            this.showView(this.availableView(this.currentView));
+        }
+    }
+    private async convertFileToPython(uri: vscode.Uri) {
+        const fileUint8Array = await vscode.workspace.fs.readFile(uri);
+
+        const file: IPyConverterFile = {
+            name: uri.path.split('/').pop() || 'project',
+            buffer: fileUint8Array.buffer as ArrayBuffer,
+        };
+        const options = {
+            output: { 'blockly.svg': true },
+        } satisfies IPyConverterOptions;
+        const result = await convertProjectToPython([file], options);
+        const filename = Array.isArray(result.name)
+            ? result.name.join(', ')
+            : result.name || 'Unknown';
+
+        const pycode: string | undefined = Array.isArray(result.pycode)
+            ? result.pycode.join('\n')
+            : result.pycode;
+
+        const pseudo: string | undefined = result.plaincode;
+
+        const preview: string | undefined = result.extra?.['blockly.svg'];
+
+        const { Graphviz } = await import('@hpcc-js/wasm-graphviz');
+        const dependencygraph = result.dependencygraph;
+        const graphviz = await Graphviz.load(); //TODO: move to static init
+        const graph: string | undefined = dependencygraph
+            ? await graphviz.dot(dependencygraph)
+            : undefined;
+
+        const content = {
+            filename,
+            pycode,
+            pseudo,
+            preview,
+            graph,
+        };
+        return content;
+    }
+
     public rotateViews(forward: boolean) {
         const view = this.availableView(
             this.nextView(this.currentView, forward ? +1 : -1),
@@ -301,4 +381,25 @@ export class blocklypyViewerProvider implements vscode.CustomReadonlyEditorProvi
     get filename(): string | undefined {
         return this.content.filename;
     }
+
+    // public serializeState(): any {
+    //     if (!this.uri) {
+    //         return undefined;
+    //     }
+
+    //     return {
+    //         uri: this.uri.toString(),
+    //         currentView: this.currentView,
+    //         content: this.content,
+    //         lastModified: this.uriLastModified,
+    //     } satisfies BlocklypyViewerState;
+    // }
+
+    // public restoreState(state: BlocklypyViewerState) {
+    //     if (state) {
+    //         this.currentView = state.currentView;
+    //         this.content = state.content;
+    //         this.showView(this.currentView);
+    //     }
+    // }
 }

@@ -257,7 +257,6 @@ class BLE {
         ) {
             return;
         }
-
         this.allDevices = {};
         noble.on('discover', (peripheral) => {
             const { localName, serviceUuids } = peripheral.advertisement;

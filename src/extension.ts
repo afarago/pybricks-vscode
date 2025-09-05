@@ -112,13 +112,13 @@ export function activate(context: vscode.ExtensionContext) {
             },
         ],
         [
-            PybricksCommand.RotateViewsForward,
+            PybricksCommand.DisplayNextView,
             async () => {
                 blocklypyProvider.rotateViews(true);
             },
         ],
         [
-            PybricksCommand.RotateViewsBackward,
+            PybricksCommand.DisplayPreviousView,
             async () => {
                 blocklypyProvider.rotateViews(false);
             },
@@ -141,7 +141,6 @@ export function activate(context: vscode.ExtensionContext) {
             // when
         ],
         [PybricksCommand.StatusPlaceHolder, async () => {}],
-        [PybricksCommand.SettingsPlaceholder, async () => {}],
     ];
 
     context.subscriptions.push(
@@ -174,6 +173,26 @@ export function activate(context: vscode.ExtensionContext) {
             context.subscriptions,
         ),
     );
+
+    // context.subscriptions.push(
+    //     vscode.window.registerWebviewPanelSerializer('pybricks.blocklypyViewer', {
+    //         async deserializeWebviewPanel(webviewPanel, state) {
+    //             const uri = vscode.Uri.parse((state as any).uri);
+    //             await blocklypyViewerProvider.activeViewer?.resolveCustomEditor(
+    //                 { uri } as vscode.CustomDocument,
+    //                 webviewPanel,
+    //                 {} as vscode.CancellationToken,
+    //             );
+    //             // Retrieve stored state
+    //             const storedState = await context.workspaceState.get(
+    //                 `blocklypyViewerState:${uri.toString()}`,
+    //             );
+    //             blocklypyViewerProvider.activeViewer?.restoreState(
+    //                 (storedState ?? state) as any,
+    //             );
+    //         },
+    //     }),
+    // );
 }
 
 export async function deactivate() {
